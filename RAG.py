@@ -40,7 +40,7 @@ def setup_rag_pipeline(pdf_path):
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
         retriever=compression_retriever,
-        chain_type="map_reduce",
+        chain_type="stuff",
         chain_type_kwargs={"prompt": prompt_template},
         return_source_documents=True,
     )
