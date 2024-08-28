@@ -11,30 +11,39 @@ from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain_ollama import OllamaEmbeddings
 
-# PDF processing and RAG pipeline setup function
 def setup_rag_pipeline(pdf_path):
     pdf_loader = PyPDFLoader(pdf_path)
     documents = pdf_loader.load_and_split()
 
-    embed_model = OllamaEmbeddings(model="mxbai-embed-large")  # Embedding Model
-    llm = OllamaLLM(model="llama3.1")  # Language Model
+    embed_model = OllamaEmbeddings(model="mxbai-embed-large", num_gpu=1,
+                                    model_kwargs={"normalize":True})  # Embedding Model
+    llm = OllamaLLM(model="llama3.1", num_gpu=1, num_thread=8, repeat_penalty=1.1, 
+                    num_beams = 3, top_p = 0.75, num_predict=1024)  # Language Model
     reranker = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")  # Reranker Model
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=180)
     texts = text_splitter.split_documents(documents=documents)
 
     vectordb = FAISS.from_documents(documents=texts, embedding=embed_model)
-    retriever = vectordb.as_retriever()
+    retriever = vectordb.as_retriever(k=20)
 
     # Optionally save the vector index
     vectordb.save_local("medical_faiss_index")
 
-    compressor = CrossEncoderReranker(model=reranker, top_n=3)
+    compressor = CrossEncoderReranker(model=reranker, top_n=4)
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=compressor, base_retriever=retriever
     )
 
-    prompt = """Answer the following question truthfully: {context}"""
+    prompt = """
+        You are an expert AI providing accurate and concise answers based on the following information:
+
+        {context}
+
+        Question: {question}
+
+        Provide a clear and informative response. Don't include any irrelevant information AND Don't repeat.
+        """
     prompt_template = PromptTemplate(template=prompt, input_variables=["context"])
 
     qa_chain = RetrievalQA.from_chain_type(
@@ -44,9 +53,7 @@ def setup_rag_pipeline(pdf_path):
         chain_type_kwargs={"prompt": prompt_template},
         return_source_documents=True,
     )
-
     return qa_chain
-
 # Function to answer questions based on the PDF
 def answer_question(pdf, chat_history, question):
     qa_chain = setup_rag_pipeline(pdf.name)
