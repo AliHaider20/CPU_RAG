@@ -4,7 +4,7 @@ Local RAG pipeline leveraging open-source SOTA LLM (Llama 3.1), Embedding (Mixed
 # Requirements
 
 ```
-pip install requirements.txt
+pip install -r requirements.txt
 ollama serve
 ```
 
