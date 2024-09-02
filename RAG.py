@@ -19,7 +19,7 @@ def setup_rag_pipeline(pdf_path):
                                     model_kwargs={"normalize":True})  # Embedding Model
     llm = OllamaLLM(model="llama3.1", num_gpu=1, num_thread=8, repeat_penalty=1.1, 
                     num_beams = 3, top_p = 0.95, top_k = 20, num_predict=3056)  # Language Model
-    reranker = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")  # Reranker Model
+    reranker = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-large")  # Reranker Model
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=180)
     texts = text_splitter.split_documents(documents=documents)
