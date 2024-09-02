@@ -3,7 +3,7 @@ Local RAG pipeline leveraging open-source SOTA LLM (Llama 3.1), Embedding (Mixed
 
 # Requirements
 
-Download Ollama and install from https://ollama.com/download
+Download and install Ollama from https://ollama.com/download
 
 ```
 pip install -r requirements.txt
