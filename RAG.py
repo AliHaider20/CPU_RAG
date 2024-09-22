@@ -21,7 +21,7 @@ def setup_rag_pipeline(pdf_path):
                     num_beams = 3, top_p = 0.95, top_k = 20, num_predict=3056)  # Language Model
     reranker = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-large")  # Reranker Model
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=180)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=20)
     texts = text_splitter.split_documents(documents=documents)
 
     vectordb = FAISS.from_documents(documents=texts, embedding=embed_model)
