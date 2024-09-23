@@ -81,9 +81,9 @@ def setup_rag_pipeline(pdf_path):
     )
     return qa_chain
 
-# file_path = input("Enter the file path: ")
-qa_chain = setup_rag_pipeline("Haider_Ali_resume.pdf")
-# question = "List all the skills of the candidate."
+file_path = input("Enter the file path: ")
+qa_chain = setup_rag_pipeline(file_path)
+
 
 if __name__ == '__main__':
     while True:
