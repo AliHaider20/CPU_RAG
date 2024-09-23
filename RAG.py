@@ -9,28 +9,54 @@ from langchain.chains import RetrievalQA
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
-from langchain_ollama import OllamaEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from langchain_huggingface.llms import HuggingFacePipeline
+import torch
 
+device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
+
+# PDF processing and RAG pipeline setup function
 def setup_rag_pipeline(pdf_path):
+    """
+    Sets up a RetrievalQA pipeline using a PyPDFLoader to load and split a PDF file,
+    and a HuggingFacePipeline for text generation.
+
+    Parameters:
+        pdf_path (str): The path to the PDF file to load and process.
+
+    Returns:
+        RetrievalQA: A RetrievalQA chain instance with a contextual compression retriever.
+    """
+
     pdf_loader = PyPDFLoader(pdf_path)
     documents = pdf_loader.load_and_split()
+    model_id = "codegood/Llama_3.1_8B_GGUF"
+    file_name= "meta-llama-3.1-8b-instruct-q2_k.gguf"
+    tokenizer = AutoTokenizer.from_pretrained(model_id, gguf_file = file_name,
+                                              trust_remote_code=True,)
+    model = AutoModelForCausalLM.from_pretrained(model_id, gguf_file = file_name,
+                                                torch_dtype=torch.bfloat16,
+                                                trust_remote_code=True)  
+    pipe = pipeline("text-generation", model=model, tokenizer=tokenizer, max_new_tokens=1024,
+                    device="auto")
+    llm = HuggingFacePipeline(pipeline=pipe)
+    reranker = HuggingFaceCrossEncoder(model_name="mixedbread-ai/mxbai-rerank-large-v1", model_kwargs = {'device': device})# Reranker Model
 
-    embed_model = OllamaEmbeddings(model="mxbai-embed-large", num_gpu=1,
-                                    model_kwargs={"normalize":True})  # Embedding Model
-    llm = OllamaLLM(model="llama3.1", num_gpu=1, num_thread=8, repeat_penalty=1.1, 
-                    num_beams = 3, top_p = 0.95, top_k = 20, num_predict=3056)  # Language Model
-    reranker = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-large")  # Reranker Model
-
+    embed_model = HuggingFaceEmbeddings(model_name="mixedbread-ai/mxbai-embed-large-v1",
+                                model_kwargs={"device":device}, encode_kwargs = {"normalize_embeddings":True}) # Embedding Model
+    
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=20)
     texts = text_splitter.split_documents(documents=documents)
 
     vectordb = FAISS.from_documents(documents=texts, embedding=embed_model)
-    retriever = vectordb.as_retriever(k=20)
+    retriever = vectordb.as_retriever(k=len(documents)//2, threshold=0.10)
 
     # Optionally save the vector index
-    vectordb.save_local("medical_faiss_index")
+    vectordb.save_local("vectorDB")
 
-    compressor = CrossEncoderReranker(model=reranker, top_n=4)
+    compressor = CrossEncoderReranker(model=reranker, top_n=len(documents)//3)
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=compressor, base_retriever=retriever
     )
@@ -54,30 +80,13 @@ def setup_rag_pipeline(pdf_path):
         return_source_documents=True,
     )
     return qa_chain
-# Function to answer questions based on the PDF
-def answer_question(pdf, chat_history, question):
-    qa_chain = setup_rag_pipeline(pdf.name)
-    response = qa_chain.invoke(question)
-    answer = response['result']
-    chat_history.append((question, answer))
-    return chat_history, chat_history
 
-# Create the Gradio interface
-with gr.Blocks(css=".chatbox .textbox {min-height: 80px; }") as demo:
-    with gr.Row():
-        gr.Markdown("# Local RAG Chatbot")
+# file_path = input("Enter the file path: ")
+qa_chain = setup_rag_pipeline("Haider_Ali_resume.pdf")
+# question = "List all the skills of the candidate."
 
-    pdf_input = gr.File(label="Upload PDF", file_types=[".pdf"])
-
-    with gr.Column():
-        chatbot = gr.Chatbot(label="Chat History")
-        question_input = gr.Textbox(label="Ask a Question", placeholder="What are the benefits of Anthem Gold PPO?")
-
-    submit_btn = gr.Button("Send")
-    chat_history = gr.State([])
-
-    submit_btn.click(fn=answer_question, inputs=[pdf_input, chat_history, question_input], outputs=[chatbot, chat_history])
-    question_input.submit(fn=answer_question, inputs=[pdf_input, chat_history, question_input], outputs=[chatbot, chat_history])
-
-# Launch the Gradio app
-demo.launch()
+if __name__ == '__main__':
+    while True:
+        question = input("Enter the question: ")
+        response = qa_chain.invoke(question)
+        print(response['result'])
