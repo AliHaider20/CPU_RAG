@@ -32,16 +32,17 @@ def setup_rag_pipeline(pdf_path):
 
     pdf_loader = PyPDFLoader(pdf_path)
     documents = pdf_loader.load_and_split()
-    model_id = "codegood/Llama_3.1_8B_GGUF"
-    file_name= "meta-llama-3.1-8b-instruct-q2_k.gguf"
-    tokenizer = AutoTokenizer.from_pretrained(model_id, gguf_file = file_name,
+
+    model_id = "google/gemma-2-2b-it"
+    tokenizer = AutoTokenizer.from_pretrained(model_id,
                                               trust_remote_code=True,)
-    model = AutoModelForCausalLM.from_pretrained(model_id, gguf_file = file_name,
+    model = AutoModelForCausalLM.from_pretrained(model_id,
                                                 torch_dtype=torch.bfloat16,
                                                 trust_remote_code=True)  
     pipe = pipeline("text-generation", model=model, tokenizer=tokenizer, max_new_tokens=1024,
                     device="auto")
     llm = HuggingFacePipeline(pipeline=pipe)
+
     reranker = HuggingFaceCrossEncoder(model_name="mixedbread-ai/mxbai-rerank-large-v1", model_kwargs = {'device': device})# Reranker Model
 
     embed_model = HuggingFaceEmbeddings(model_name="mixedbread-ai/mxbai-embed-large-v1",
